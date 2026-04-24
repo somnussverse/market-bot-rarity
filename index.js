@@ -23,6 +23,8 @@ client.once(Events.ClientReady, () => {
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
+  console.log("Triggered once");
+
   console.log("MESSAGE:", message.content);
 
   if (!message.content.startsWith('!order')) return;
