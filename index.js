@@ -21,15 +21,47 @@ client.once(Events.ClientReady, () => {
 
 // CREATE ORDER
 client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot) return;
+
+  console.log("MESSAGE:", message.content);
+
   if (!message.content.startsWith('!order')) return;
 
-  const text = message.content.replace('!order', '').trim();
+  // DEFAULT VALUES
+  let buyer = message.author.username;
+  let payment = 'Not specified';
+  let order = 'No details provided';
+
+  // PARSE ADVANCED FORMAT (#buyer=... etc.)
+  const args = message.content.slice('!order'.length).trim();
+
+  if (args.includes('#')) {
+    const parts = args.split('#').slice(1);
+
+    parts.forEach(part => {
+      const [key, ...value] = part.split('=');
+      const val = value.join('=').trim();
+
+      if (!val) return;
+
+      if (key.toLowerCase() === 'buyer') buyer = val;
+      if (key.toLowerCase() === 'payment') payment = val;
+      if (key.toLowerCase() === 'order') order = val;
+    });
+  } else {
+    // SIMPLE FORMAT (!order pizza)
+    order = args || order;
+  }
 
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setTitle('🛒 Order')
-    .setDescription(text)
-    .addFields({ name: 'Status', value: 'undone' })
+    .addFields(
+      { name: 'Buyer', value: buyer },
+      { name: 'Payment', value: payment },
+      { name: 'Order', value: order },
+      { name: 'Status', value: 'undone' }
+    )
     .setFooter({ text: `Created by ${message.author.id}` });
 
   const menu = new StringSelectMenuBuilder()
@@ -56,7 +88,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.customId !== 'status-select') return;
 
   const selected = interaction.values[0];
-
   const embed = EmbedBuilder.from(interaction.message.embeds[0]);
 
   const creatorId = embed.data.footer.text.replace('Created by ', '');
@@ -69,14 +100,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
     });
   }
 
-  // UPDATE STATUS
-  const newEmbed = EmbedBuilder.from(embed)
-    .spliceFields(0, 1, {
+  const newEmbed = EmbedBuilder.from(embed);
+
+  // FIND STATUS FIELD
+  const index = newEmbed.data.fields.findIndex(f => f.name === 'Status');
+
+  if (index !== -1) {
+    newEmbed.spliceFields(index, 1, {
       name: 'Status',
       value: selected
     });
+  }
 
-  // LOCK IF DONE
+  // DISABLE IF DONE
   const disabled = selected === 'done';
 
   const menu = StringSelectMenuBuilder.from(interaction.component)
