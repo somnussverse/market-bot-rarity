@@ -1,7 +1,7 @@
 const express = require('express');
 const app = express();
 
-// 1. WEB SERVER (Keeps the bot alive on Render)
+// --- WEB SERVER FOR UPTIME ---
 app.get('/', (req, res) => {
   res.send('Bot is online!');
 });
@@ -22,10 +22,10 @@ const {
     Routes 
 } = require('discord.js');
 
-// --- CONFIGURATION ---
-const TOKEN = 'PASTE_YOUR_TOKEN_HERE';
-const CLIENT_ID = 'PASTE_YOUR_APPLICATION_ID_HERE';
-// ---------------------
+// --- ENVIRONMENT VARIABLES ---
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+// -----------------------------
 
 const client = new Client({
   intents: [
@@ -35,7 +35,7 @@ const client = new Client({
   ]
 });
 
-// 2. SLASH COMMAND REGISTRATION
+// --- SLASH COMMAND SETUP ---
 const commands = [
     new SlashCommandBuilder()
         .setName('box')
@@ -54,13 +54,13 @@ client.once(Events.ClientReady, async () => {
     console.log(`Logged in as ${client.user.tag}`);
     try {
         await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-        console.log('Slash commands registered successfully.');
+        console.log('Slash commands registered.');
     } catch (error) {
         console.error('Error registering commands:', error);
     }
 });
 
-// 3. SLASH COMMAND HANDLER (Box & Divider)
+// --- BOX & DIVIDER HANDLER ---
 client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -86,7 +86,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 });
 
-// 4. MESSAGE COMMAND HANDLER (!order)
+// --- !ORDER HANDLER ---
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || !message.content.startsWith('!order')) return;
 
@@ -135,7 +135,7 @@ client.on(Events.MessageCreate, async (message) => {
   await message.channel.send({ embeds: [embed], components: [row] });
 });
 
-// 5. STATUS UPDATE HANDLER (Menu)
+// --- STATUS SELECTOR HANDLER ---
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isStringSelectMenu() || interaction.customId !== 'status-select') return;
 
