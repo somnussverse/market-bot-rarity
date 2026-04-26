@@ -1,31 +1,18 @@
 const express = require('express');
 const app = express();
 
-// --- WEB SERVER FOR UPTIME ---
-app.get('/', (req, res) => {
-  res.send('Bot is online!');
-});
-
-app.listen(3000, () => {
-  console.log('Web server is ready on port 3000.');
-});
+// Keep-alive web server
+app.get('/', (req, res) => res.send('Bot is online!'));
+app.listen(3000, () => console.log('Web server active.'));
 
 const { 
-    Client, 
-    GatewayIntentBits, 
-    EmbedBuilder, 
-    ActionRowBuilder, 
-    StringSelectMenuBuilder, 
-    Events, 
-    SlashCommandBuilder, 
-    REST, 
-    Routes 
+    Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, 
+    StringSelectMenuBuilder, Events, SlashCommandBuilder, REST, Routes 
 } = require('discord.js');
 
-// --- ENVIRONMENT VARIABLES ---
+// These grab your secrets from Render's "Environment" tab
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-// -----------------------------
 
 const client = new Client({
   intents: [
@@ -35,7 +22,7 @@ const client = new Client({
   ]
 });
 
-// --- SLASH COMMAND SETUP ---
+// Register /box and /divider
 const commands = [
     new SlashCommandBuilder()
         .setName('box')
@@ -46,7 +33,7 @@ const commands = [
         .setName('divider')
         .setDescription('Send a divider image box')
         .addStringOption(opt => opt.setName('image_url').setDescription('Link to divider image').setRequired(true))
-].map(command => command.toJSON());
+].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
@@ -54,22 +41,18 @@ client.once(Events.ClientReady, async () => {
     console.log(`Logged in as ${client.user.tag}`);
     try {
         await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-        console.log('Slash commands registered.');
-    } catch (error) {
-        console.error('Error registering commands:', error);
-    }
+        console.log('Slash commands synced.');
+    } catch (err) { console.error(err); }
 });
 
-// --- BOX & DIVIDER HANDLER ---
+// Handle / commands
 client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'box') {
-        const rawContent = interaction.options.getString('content');
+        const raw = interaction.options.getString('content');
         const color = interaction.options.getString('color') || '#B2EBF2';
-        const sections = rawContent.split('|');
-        
-        const embeds = sections.map(section => {
+        const embeds = raw.split('|').map(section => {
             const [title, ...body] = section.split(':');
             return new EmbedBuilder()
                 .setTitle(title.trim())
@@ -81,33 +64,25 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.commandName === 'divider') {
         const url = interaction.options.getString('image_url');
-        const embed = new EmbedBuilder().setImage(url).setColor('#B2EBF2');
-        await interaction.reply({ embeds: [embed] });
+        await interaction.reply({ embeds: [new EmbedBuilder().setImage(url).setColor('#B2EBF2')] });
     }
 });
 
-// --- !ORDER HANDLER ---
+// Handle !order commands
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || !message.content.startsWith('!order')) return;
 
-  let buyer = message.author.username;
-  let payment = 'Not specified';
-  let order = 'No details provided';
-
-  const args = message.content.slice('!order'.length).trim();
+  const args = message.content.slice(7).trim();
+  let buyer = message.author.username, payment = 'N/A', order = args || 'No details';
 
   if (args.includes('#')) {
-    const parts = args.split('#').slice(1);
-    parts.forEach(part => {
-      const [key, ...value] = part.split('=');
-      const val = value.join('=').trim();
-      if (!val) return;
-      if (key.toLowerCase() === 'buyer') buyer = val;
-      if (key.toLowerCase() === 'payment') payment = val;
-      if (key.toLowerCase() === 'order') order = val;
+    args.split('#').slice(1).forEach(part => {
+      const [k, ...v] = part.split('=');
+      const val = v.join('=').trim();
+      if (k === 'buyer') buyer = val;
+      if (k === 'payment') payment = val;
+      if (k === 'order') order = val;
     });
-  } else {
-    order = args || order;
   }
 
   const embed = new EmbedBuilder()
@@ -121,43 +96,29 @@ client.on(Events.MessageCreate, async (message) => {
     )
     .setFooter({ text: `Created by ${message.author.id}` });
 
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId('status-select')
-    .setPlaceholder('Select status...')
-    .addOptions([
-      { label: 'undone', value: 'undone' },
-      { label: 'in making', value: 'in making' },
-      { label: 'done', value: 'done' },
-      { label: 'cancelled', value: 'cancelled' }
-    ]);
+  const menu = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('status-select')
+      .addOptions([
+        { label: 'undone', value: 'undone' },
+        { label: 'in making', value: 'in making' },
+        { label: 'done', value: 'done' }
+      ])
+  );
 
-  const row = new ActionRowBuilder().addComponents(menu);
-  await message.channel.send({ embeds: [embed], components: [row] });
+  await message.channel.send({ embeds: [embed], components: [menu] });
 });
 
-// --- STATUS SELECTOR HANDLER ---
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isStringSelectMenu() || interaction.customId !== 'status-select') return;
+// Handle Status Menu
+client.on(Events.InteractionCreate, async (int) => {
+  if (!int.isStringSelectMenu() || int.customId !== 'status-select') return;
+  const embed = EmbedBuilder.from(int.message.embeds[0]);
+  const creatorId = embed.data.footer.text.split(' ').pop();
 
-  const selected = interaction.values[0];
-  const embed = EmbedBuilder.from(interaction.message.embeds[0]);
-  const creatorId = embed.data.footer.text.replace('Created by ', '');
+  if (int.user.id !== creatorId) return int.reply({ content: "Not your order!", ephemeral: true });
 
-  if (interaction.user.id !== creatorId) {
-    return interaction.reply({ content: "❌ You can't change this order.", ephemeral: true });
-  }
-
-  const newEmbed = EmbedBuilder.from(embed);
-  const index = newEmbed.data.fields.findIndex(f => f.name === 'Status');
-  if (index !== -1) {
-    newEmbed.spliceFields(index, 1, { name: 'Status', value: selected });
-  }
-
-  const disabled = selected === 'done';
-  const menu = StringSelectMenuBuilder.from(interaction.component).setDisabled(disabled);
-  const row = new ActionRowBuilder().addComponents(menu);
-
-  await interaction.update({ embeds: [newEmbed], components: [row] });
+  embed.spliceFields(3, 1, { name: 'Status', value: int.values[0] });
+  await int.update({ embeds: [embed] });
 });
 
 client.login(TOKEN);
