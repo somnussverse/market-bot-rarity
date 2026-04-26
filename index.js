@@ -1,3 +1,14 @@
+const express = require('express');
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('Bot is online and stays awake!');
+});
+
+app.listen(3000, () => {
+  console.log('Web server is ready.');
+});
+
 const {
   Client,
   GatewayIntentBits,
@@ -19,7 +30,7 @@ client.once(Events.ClientReady, () => {
   console.log(`Bot online as ${client.user.tag}`);
 });
 
-// CREATE ORDER
+
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
@@ -29,12 +40,12 @@ client.on(Events.MessageCreate, async (message) => {
 
   if (!message.content.startsWith('!order')) return;
 
-  // DEFAULT VALUES
+
   let buyer = message.author.username;
   let payment = 'Not specified';
   let order = 'No details provided';
 
-  // PARSE ADVANCED FORMAT (#buyer=... etc.)
+
   const args = message.content.slice('!order'.length).trim();
 
   if (args.includes('#')) {
@@ -51,7 +62,7 @@ client.on(Events.MessageCreate, async (message) => {
       if (key.toLowerCase() === 'order') order = val;
     });
   } else {
-    // SIMPLE FORMAT (!order pizza)
+    
     order = args || order;
   }
 
@@ -84,7 +95,7 @@ client.on(Events.MessageCreate, async (message) => {
   });
 });
 
-// HANDLE STATUS CHANGE
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isStringSelectMenu()) return;
   if (interaction.customId !== 'status-select') return;
@@ -94,7 +105,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   const creatorId = embed.data.footer.text.replace('Created by ', '');
 
-  // ONLY CREATOR CAN CHANGE
+
   if (interaction.user.id !== creatorId) {
     return interaction.reply({
       content: "❌ You can't change this order.",
@@ -104,7 +115,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   const newEmbed = EmbedBuilder.from(embed);
 
-  // FIND STATUS FIELD
+
   const index = newEmbed.data.fields.findIndex(f => f.name === 'Status');
 
   if (index !== -1) {
@@ -114,7 +125,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     });
   }
 
-  // DISABLE IF DONE
+
   const disabled = selected === 'done';
 
   const menu = StringSelectMenuBuilder.from(interaction.component)
